@@ -1,0 +1,14 @@
+{
+    "name": "LocalHide",
+    "description": "Locally hide and protect messages in Discord DMs.",
+    "authors": [
+        {
+            "name": "uchumeow",
+            "id": "0"
+        }
+    ],
+    "main": "src/index.tsx",
+    "vendetta": {
+        "icon": "ic_eye_closed_24px"
+    }
+}
