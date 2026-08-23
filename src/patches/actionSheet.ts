@@ -7,6 +7,7 @@ import {
     getAssetIdSafe,
     getFormRow,
     getLazyActionSheet,
+    isMessageSheetKey,
     resolveWithRetry
 } from "../lib/metro";
 import { getChannel, isOneToOneDm } from "../lib/snapshot";
@@ -39,7 +40,7 @@ export async function patchActionSheet(): Promise<void> {
     }
 
     unpatchOpenLazy = before("openLazy", LazyActionSheet as any, ([comp, key, msg]) => {
-        if (key !== "MessageLongPressActionSheet" || !msg?.message) return;
+        if (!isMessageSheetKey(key) || !msg?.message) return;
         if (!comp?.then) return;
 
         const message = msg.message;

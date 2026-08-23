@@ -132,18 +132,14 @@ function findByDisplayNameSafe(name: string): any {
 }
 
 export function getRowGenerator(): any {
-    const byPath = findByFilePathRaw("modules/messages/native/renderer/RowGenerator.tsx");
-    if (byPath) return byPath;
-    const byName = findByName("RowGenerator", false) ?? findByName("RowGenerator", true);
-    if (byName) return byName;
-    const byProps = findByProps("RowGeneratorTypes", "RowGeneratorConstants");
-    return byProps ?? null;
+    // File path ONLY - loose name/props matching has hit sibling modules
+    // (e.g. GuildDirectoryRowGenerator) on real builds.
+    return findByFilePathRaw("modules/messages/native/renderer/RowGenerator.tsx") ?? null;
 }
 
-export function getMessageWithContent(): any {
-    const byPath = findByFilePathRaw("modules/messages/native/renderer/MessageWithContent.tsx");
-    if (byPath) return byPath;
-    return findByName("MessageWithContent", false) ?? findByName("MessageWithContent", true) ?? null;
+/** The long-press sheet key changed across Discord versions; match resiliently. */
+export function isMessageSheetKey(key: unknown): boolean {
+    return typeof key === "string" && /^longpressmessageactionsheet$/i.test(key);
 }
 
 export function getChatView(): any {
@@ -152,6 +148,12 @@ export function getChatView(): any {
         findByFilePathRaw("modules/chat/native/Chat.ios.tsx");
     if (byPath) return byPath;
     return findByName("ChatView", false) ?? null;
+}
+
+export function getMessageWithContent(): any {
+    return findByFilePathRaw("modules/messages/native/renderer/MessageWithContent.tsx")
+        ?? findByName("MessageWithContent", false)
+        ?? null;
 }
 
 /**

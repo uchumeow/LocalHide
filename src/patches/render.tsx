@@ -33,6 +33,14 @@ import { dbg, log, warn } from "../lib/logger";
 const unpatchers: Array<() => void> = [];
 let filterStats = { input: 0, output: 0, backstop: 0 };
 
+/**
+ * RowGenerator.generate array surgery is OFF by default: mutating Discord's
+ * managed row arrays destabilizes list virtualization on some builds
+ * (random native crashes). Hiding relies on the MessageWithContent render
+ * backstop instead, which never touches list data.
+ */
+const ENABLE_ROW_GENERATOR_FILTER = false;
+
 export function getFilterStats() {
     return { ...filterStats };
 }
@@ -48,6 +56,10 @@ function messageIdOf(item: any): string | null {
 }
 
 async function patchRowGenerator(): Promise<void> {
+    if (!ENABLE_ROW_GENERATOR_FILTER) {
+        featureStatus.rowFilter = false;
+        return;
+    }
     const mod = await resolveWithRetry(getRowGenerator, 20, 1500);
     if (!mod) {
         warn("RowGenerator not found - relying on render backstop only");
