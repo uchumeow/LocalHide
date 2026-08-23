@@ -152,7 +152,9 @@ export function getRowGenerator(): any {
 
 /** The long-press sheet key changed across Discord versions; match resiliently. */
 export function isMessageSheetKey(key: unknown): boolean {
-    return typeof key === "string" && /^longpressmessageactionsheet$/i.test(key);
+    if (typeof key !== "string") return false;
+    const normalized = key.toLowerCase();
+    return normalized === "messagelongpressactionsheet" || normalized === "longpressmessageactionsheet";
 }
 
 export function getChatView(): any {
