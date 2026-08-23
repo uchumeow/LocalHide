@@ -148,6 +148,7 @@ export class ArchiveManager {
         displayName: string | null,
         password: string
     ): Promise<void> {
+        if (!this.fs) throw new Error("Local storage unavailable (native file module not found)");
         const existing = await this.readRecord(channelId);
         if (existing) throw new Error("Archive already exists");
 

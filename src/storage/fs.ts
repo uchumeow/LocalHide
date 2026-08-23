@@ -9,20 +9,29 @@ type AnyRecord = Record<string, any>;
 
 function resolveFileModule(): any {
     const g = globalThis as AnyRecord;
+    // Same names/order as Kettu's own native module resolution
+    const NAMES = ["NativeFileModule", "RTNFileManager", "DCDFileManager"];
     try {
         if (g.__turboModuleProxy) {
-            for (const name of ["RTNFileManager", "DCDFileManager", "NativeFileModule"]) {
+            for (const name of NAMES) {
                 const m = g.__turboModuleProxy(name);
-                if (m) return m;
+                if (m) {
+                    resolvedModuleName = `turbo:${name}`;
+                    return m;
+                }
             }
         }
     } catch {}
     const nmp = g.nativeModuleProxy;
     if (nmp) {
-        for (const name of ["RTNFileManager", "DCDFileManager", "NativeFileModule"]) {
-            if (nmp[name]) return nmp[name];
+        for (const name of NAMES) {
+            if (nmp[name]) {
+                resolvedModuleName = `proxy:${name}`;
+                return nmp[name];
+            }
         }
     }
+    resolvedModuleName = null;
     return null;
 }
 
@@ -33,6 +42,12 @@ export interface FsAdapter {
     writeText(path: string, data: string): Promise<void>;
     remove(path: string): Promise<void>;
     exists(path: string): Promise<boolean>;
+}
+
+/** Diagnostics only: which native module backed the adapter, if any. */
+let resolvedModuleName: string | null = null;
+export function getFilesystemModuleName(): string | null {
+    return resolvedModuleName;
 }
 
 export function createFsAdapter(): FsAdapter | null {

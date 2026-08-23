@@ -6,6 +6,7 @@ import { openScreen } from "./lib/modal";
 import ManageConversations from "./screens/Manage";
 import { featureStatus } from "./lib/metro";
 import { SCHEMA_VERSION } from "./storage/schema";
+import { getFilesystemModuleName } from "./storage/fs";
 import { isDebugEnabled, setDebugEnabled } from "./lib/logger";
 
 /**
@@ -46,6 +47,11 @@ export default function Settings() {
                         setDebugEnabled(v);
                         force();
                     }}
+                />
+                <FormDivider />
+                <FormRow
+                    label="Storage backend"
+                    trailing={<FormText>{getFilesystemModuleName() ?? "unavailable"}</FormText>}
                 />
                 <FormDivider />
                 <FormRow

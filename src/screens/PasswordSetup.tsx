@@ -48,8 +48,9 @@ export default function PasswordSetupScreen({ channelId }: { channelId: string }
             log("archive created; committing", pending?.snapshots.length ?? 0, "hidden message(s)");
             closeTopScreen();
         } catch (e) {
-            setErrorText("Could not create the archive. Try again.");
-            log("create archive failed:", e instanceof Error ? e.message : e);
+            const detail = e instanceof Error ? e.message : String(e);
+            setErrorText(`Could not create the archive. ${detail}`);
+            log("create archive failed:", detail);
         } finally {
             setBusy(false);
         }
