@@ -15,7 +15,8 @@ import { log, warn } from "../lib/logger";
 let unpatch: (() => void) | null = null;
 
 export async function patchProfilePanel(): Promise<void> {
-    const Section = await resolveWithRetry(getUserProfileSection, 20, 1500);
+    // profile modules lazy-init; give it a long window (user may open a profile late)
+    const Section = await resolveWithRetry(getUserProfileSection, 120, 3000);
     if (typeof Section !== "function") {
         warn("UserProfileSection not found - profile panel unavailable");
         return;

@@ -15,18 +15,26 @@ type Listener = () => void;
 
 export class StateStore {
     private fs: FsAdapter | null;
-    private enqueue = writeQueue();
-    private data: StateData = emptyState();
-    private loaded = false;
+    private enqueue: ReturnType<typeof writeQueue>;
+    private data: StateData;
+    private loaded: boolean;
 
     // O(1) lookups for rendering
-    readonly hiddenGlobal = new Set<string>();
-    private perChannel = new Map<string, Set<string>>();
+    readonly hiddenGlobal: Set<string>;
+    private perChannel: Map<string, Set<string>>;
 
-    private listeners = new Set<Listener>();
+    private listeners: Set<Listener>;
 
     constructor(fs?: FsAdapter | null) {
+        // NOTE: all instance state is assigned here explicitly; class field
+        // initializers are unreliable under the plugin build's class transform
         this.fs = fs === undefined ? createFsAdapter() : fs;
+        this.enqueue = writeQueue();
+        this.data = emptyState();
+        this.loaded = false;
+        this.hiddenGlobal = new Set<string>();
+        this.perChannel = new Map<string, Set<string>>();
+        this.listeners = new Set<Listener>();
     }
 
     async load(): Promise<void> {

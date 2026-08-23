@@ -1,4 +1,4 @@
-import { findByProps, findByName, findByStoreName } from "@vendetta/metro";
+import { findByProps, findByName, findByStoreName, findByDisplayName } from "@vendetta/metro";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 /**
@@ -113,7 +113,22 @@ export function getAssetIdSafe(names: string[]): number | undefined {
 // --- Feature-specific components --------------------------------------------
 
 export function getUserProfileSection(): any {
-    return findByName("UserProfileSection", false) ?? findByName("UserProfileSection", true) ?? null;
+    const byPath = findByFilePathRaw("modules/user_profile/native/UserProfileSection.tsx");
+    if (byPath) return byPath;
+    return (
+        findByName("UserProfileSection", false) ??
+        findByName("UserProfileSection", true) ??
+        findByDisplayNameSafe("UserProfileSection") ??
+        null
+    );
+}
+
+function findByDisplayNameSafe(name: string): any {
+    try {
+        return findByDisplayName(name, false) ?? findByDisplayName(name, true) ?? null;
+    } catch {
+        return null;
+    }
 }
 
 export function getRowGenerator(): any {

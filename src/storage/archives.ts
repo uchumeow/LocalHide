@@ -57,19 +57,27 @@ interface DeviceKeyFile {
 }
 
 export class ArchiveManager {
-    private fs: FsAdapter | null = null;
-    private enqueue = writeQueue();
+    private fs: FsAdapter | null;
+    private enqueue: ReturnType<typeof writeQueue>;
     private state: StateStore;
 
     // unwrapped master keys held in memory only while LocalHide runs
-    private sessionKeys = new Map<string, Uint8Array>();
-    private deviceKeyPromise: Promise<Uint8Array | null> | null = null;
+    private sessionKeys: Map<string, Uint8Array>;
+    private deviceKeyPromise: Promise<Uint8Array | null> | null;
+
+    private injectedFs: FsAdapter | null | undefined;
 
     constructor(
-        private injectedFs?: FsAdapter | null,
+        injectedFs?: FsAdapter | null,
         injectedState?: StateStore
     ) {
+        // NOTE: explicit constructor assignment - see StateStore note
+        this.injectedFs = injectedFs;
+        this.fs = injectedFs !== undefined ? injectedFs : createFsAdapter();
+        this.enqueue = writeQueue();
         this.state = injectedState ?? defaultStateStore;
+        this.sessionKeys = new Map<string, Uint8Array>();
+        this.deviceKeyPromise = null;
     }
 
     init(): void {

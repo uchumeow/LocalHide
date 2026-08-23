@@ -13,8 +13,13 @@ interface SelectionState {
 type Listener = () => void;
 
 class SelectionStore {
-    private state: SelectionState = { active: false, channelId: null, selected: new Set() };
-    private listeners = new Set<Listener>();
+    private state: SelectionState;
+    private listeners: Set<Listener>;
+
+    constructor() {
+        this.state = { active: false, channelId: null, selected: new Set() };
+        this.listeners = new Set<Listener>();
+    }
 
     get(): SelectionState {
         return this.state;
@@ -70,9 +75,15 @@ export const selection = new SelectionStore();
  * Messages queued to hide once a password/archive setup flow completes.
  */
 class PendingHideStore {
-    private channelId: string | null = null;
-    private snapshots: any[] = [];
-    private meta: { userId: string | null; displayName: string | null } | null = null;
+    private channelId: string | null;
+    private snapshots: any[];
+    private meta: { userId: string | null; displayName: string | null } | null;
+
+    constructor() {
+        this.channelId = null;
+        this.snapshots = [];
+        this.meta = null;
+    }
 
     begin(channelId: string, snapshots: any[], meta: { userId: string | null; displayName: string | null }) {
         this.channelId = channelId;
