@@ -9,86 +9,57 @@ import {
     getFormRow,
     getLazyActionSheet,
     isMessageSheetKey,
-    resolveWithRetry
+    resolveWithRetry,
+    findByFilePathRaw
 } from "../lib/metro";
-import { traceStep } from "../storage/fs";
 import { getChannel, isOneToOneDm } from "../lib/snapshot";
+import { traceStep } from "../storage/fs";
 import HideRows from "../components/HideRows";
 import { dbg, log, warn } from "../lib/logger";
 
 /**
  * Message long-press action sheet entries.
  *
- * Verified pattern for Discord 305.x / Kettu: ActionSheet.openLazy receives
- * (lazyComponentPromise, key, args) where key === "MessageLongPressActionSheet"
- * and args carries the pressed message. We wrap the lazily-resolved component
- * and inject LocalHide rows into the first ActionSheetRowGroup of the rendered
- * tree. The inner patch removes itself when the sheet unmounts.
+ * Three strategies, all defensive:
+ *   A. Direct patch of modules/messages/native/long_press/
+ *      LongPressMessageActionSheet.tsx (305.x location).
+ *   B. Legacy ActionSheet.openLazy hook with resilient key matching
+ *      ("LongPressMessageActionSheet", older "MessageLongPressActionSheet").
+ * The openLazy observer also records every sheet key seen (trace.log).
  */
 
-let unpatchOpenLazy: (() => void) | null = null;
+const unpatchers: Array<() => void> = [];
 
 function isDmEligible(message: any): boolean {
     const channelId = String(message?.channel_id ?? message?.channelId ?? "");
     if (!channelId || !message?.id) return false;
-    return isOneToOneDm(getChannel(channelId));
-}
-
-export async function patchActionSheet(): Promise<void> {
-    const LazyActionSheet = await resolveWithRetry(getLazyActionSheet, 20, 1500);
-    if (!LazyActionSheet?.openLazy) {
-        warn("ActionSheet module not found - hide actions unavailable");
-        return;
-    }
-
-    unpatchOpenLazy = before("openLazy", LazyActionSheet as any, ([comp, key, msg]) => {
-        // record every sheet key we see - survives crashes via trace.log
-        if (typeof key === "string") traceStep(`sheet:${key}`);
-
-        if (!flags.injectActionRows) return;
-        if (!isMessageSheetKey(key) || !msg?.message) return;
-        if (!comp?.then) return;
-
-        const message = msg.message;
-        if (!isDmEligible(message)) return;
-
-        comp.then((instance: any) => {
-            try {
-                const unpatchInner = after("default", instance, (_args: unknown, tree: any) => {
-                    // runs inside the sheet's render; hook into its lifecycle
-                    React.useEffect(() => {
-                        return () => {
-                            unpatchInner();
-                        };
-                    }, []);
-                    injectRows(tree, message);
-                });
-            } catch (e) {
-                dbg("action sheet inner patch failed:", e instanceof Error ? e.message : e);
-            }
-        }).catch((e: unknown) => {
-            dbg("lazy sheet resolve failed:", e instanceof Error ? e.message : e);
-        });
-    });
-
-    featureStatus.actionSheet = true;
-    log("action sheet observer installed (inject=" + flags.injectActionRows + ")");
-}
-
-export function unpatchActionSheet(): void {
     try {
-        unpatchOpenLazy?.();
-    } catch {}
-    unpatchOpenLazy = null;
+        return isOneToOneDm(getChannel(channelId));
+    } catch {
+        return false;
+    }
 }
 
-function injectRows(tree: any, message: any) {
+function extractMessage(...candidates: any[]): any {
+    for (const c of candidates) {
+        const m = c?.message ?? c?.msg?.message ?? c?.msg;
+        if (m?.id) return m;
+    }
+    return null;
+}
+
+/** Inject LocalHide rows once per render pass; returns true when placed. */
+function injectRows(tree: any, message: any): boolean {
     const ActionSheetRow = getActionSheetRow();
     const FormRow = getFormRow();
-    if (!ActionSheetRow && !FormRow) {
-        warn("no row component available for action sheet injection");
-        return;
-    }
+    if (!ActionSheetRow && !FormRow) return false;
+
+    // already injected this pass?
+    const existing = findInReactTree(
+        tree,
+        (c: any) => Array.isArray(c) && c.some((x: any) => x?.props?.label === "Hide Locally")
+    );
+    if (Array.isArray(existing)) return true;
 
     const iconHide = getAssetIdSafe([
         "ic_eye_closed_24px",
@@ -108,26 +79,21 @@ function injectRows(tree: any, message: any) {
         ActionSheetRow,
         FormRow,
         iconHide,
-        iconSelect
+        iconSelect,
+        selectionAvailable: featureStatus.selectionBanner
     });
 
-    // Preferred: insert into the array containing real ActionSheetRow elements.
     const rowArray: any[] | undefined = findInReactTree(
         tree,
         (c: any) =>
             Array.isArray(c) &&
-            c.some(
-                (child: any) =>
-                    child?.type === ActionSheetRow || child?.type?.name === "ActionSheetRow"
-            )
+            c.some((child: any) => child?.type === ActionSheetRow || child?.type?.name === "ActionSheetRow")
     );
-
     if (Array.isArray(rowArray)) {
         rowArray.push(rowsElement);
-        return;
+        return true;
     }
 
-    // Fallback: first plausible array of labeled rows anywhere in the tree.
     const broadArray: any[] | undefined = findInReactTree(
         tree,
         (c: any) =>
@@ -135,11 +101,96 @@ function injectRows(tree: any, message: any) {
             c.length >= 2 &&
             c.filter((x: any) => x?.props && ("label" in x.props || x?.type?.name?.includes("Row"))).length >= 2
     );
-
     if (Array.isArray(broadArray)) {
         broadArray.push(rowsElement);
-        return;
+        return true;
     }
+    return false;
+}
 
-    dbg("could not locate action row container; sheet left untouched");
+export async function patchActionSheet(): Promise<void> {
+    const jobs: Array<Promise<void>> = [];
+
+    // --- Strategy A: direct component patch ---------------------------------
+    jobs.push(
+        resolveWithRetry(
+            () => findByFilePathRaw("modules/messages/native/long_press/LongPressMessageActionSheet.tsx"),
+            40,
+            3000
+        ).then(mod => {
+            if (!mod) return dbg("A: direct sheet module not found");
+            const target = typeof mod === "function" ? mod : mod.default;
+            if (typeof target !== "function") return dbg("A: direct sheet target invalid");
+
+            unpatchers.push(
+                after("default", target as any, ([props]: any[], tree: any) => {
+                    try {
+                        const message = extractMessage(props, props?.route?.params);
+                        if (!message || !isDmEligible(message)) return;
+                        const ok = injectRows(tree, message);
+                        if (ok) traceStep("inject:A");
+                        else traceStep("inject:A-miss");
+                    } catch (e) {
+                        dbg("A injection error:", e instanceof Error ? e.message : e);
+                    }
+                })
+            );
+            log("sheet strategy A installed");
+            featureStatus.actionSheet = true;
+        })
+    );
+
+    // --- Strategy B/C: openLazy hook + observer ------------------------------
+    jobs.push(
+        resolveWithRetry(getLazyActionSheet, 20, 1500).then(LazyActionSheet => {
+            if (!LazyActionSheet?.openLazy) {
+                warn("openLazy module not found");
+                return;
+            }
+            unpatchers.push(
+                before("openLazy", LazyActionSheet as any, ([comp, key, msg]) => {
+                    if (typeof key === "string") traceStep(`sheet:${key}`);
+                    if (!flags.injectActionRows) return;
+                    if (!isMessageSheetKey(key) || !msg?.message) return;
+                    if (!comp?.then) return;
+
+                    const message = msg.message;
+                    if (!isDmEligible(message)) return;
+
+                    comp.then((instance: any) => {
+                        try {
+                            const unpatchInner = after("default", instance, (_args: unknown, tree: any) => {
+                                React.useEffect(() => {
+                                    return () => {
+                                        unpatchInner();
+                                    };
+                                }, []);
+                                try {
+                                    const ok = injectRows(tree, message);
+                                    if (ok) traceStep("inject:C");
+                                } catch (e) {
+                                    dbg("C injection error:", e instanceof Error ? e.message : e);
+                                }
+                            });
+                        } catch (e) {
+                            dbg("inner patch failed:", e instanceof Error ? e.message : e);
+                        }
+                    }).catch((e: unknown) => {
+                        dbg("lazy sheet resolve failed:", e instanceof Error ? e.message : e);
+                    });
+                })
+            );
+            log("sheet strategy B/C installed");
+        })
+    );
+
+    await Promise.allSettled(jobs);
+}
+
+export function unpatchActionSheet(): void {
+    for (const up of unpatchers.splice(0)) {
+        try {
+            up();
+        } catch {}
+    }
 }

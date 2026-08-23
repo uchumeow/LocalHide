@@ -21,8 +21,8 @@ type AnyRecord = Record<string, any>;
  */
 export const flags = {
     observeActionSheets: true,
-    injectActionRows: false,
-    messageBackstop: false,
+    injectActionRows: true,
+    messageBackstop: true,
     chatBanner: false,
     profilePanel: false,
     rowGeneratorFilter: false

@@ -13,13 +13,14 @@ interface Props {
     FormRow: any;
     iconHide?: number;
     iconSelect?: number;
+    selectionAvailable?: boolean;
 }
 
 /**
  * The injected action rows. Rendered as a fragment so it can be pushed into
  * an existing row array without changing Discord's layout.
  */
-export default function HideRows({ message, ActionSheetRow, FormRow, iconHide, iconSelect }: Props) {
+export default function HideRows({ message, ActionSheetRow, FormRow, iconHide, iconSelect, selectionAvailable }: Props) {
     const onPressHide = () => {
         try {
             closeSheet();
@@ -30,7 +31,7 @@ export default function HideRows({ message, ActionSheetRow, FormRow, iconHide, i
     };
 
     const onPressSelect = () => {
-        if (!featureStatus.selectionBanner) {
+        if (!selectionAvailable && !featureStatus.selectionBanner) {
             log("selection mode unavailable (ChatView overlay not found on this build)");
             return;
         }
