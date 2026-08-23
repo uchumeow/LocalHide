@@ -3,6 +3,7 @@ import { React } from "@vendetta/metro/common";
 import { View, Pressable, StyleSheet } from "react-native";
 import {
     featureStatus,
+    flags,
     getChatView,
     getMessageWithContent,
     getRowGenerator,
@@ -257,8 +258,20 @@ async function patchChatViewBanner(): Promise<void> {
     featureStatus.selectionBanner = true;
 }
 
+async function applyRenderPatchesInner(): Promise<void> {
+    const jobs: Promise<void>[] = [];
+    if (flags.messageBackstop || flags.chatBanner) jobs.push(patchMessageWithContent());
+    if (flags.rowGeneratorFilter) jobs.push(patchRowGenerator());
+    if (flags.chatBanner) jobs.push(patchChatViewBanner());
+    await Promise.allSettled(jobs);
+}
+
 export async function applyRenderPatches(): Promise<void> {
-    await Promise.allSettled([patchRowGenerator(), patchMessageWithContent(), patchChatViewBanner()]);
+    if (!flags.messageBackstop && !flags.rowGeneratorFilter && !flags.chatBanner) {
+        dbg("render patches disabled by flags");
+        return;
+    }
+    await applyRenderPatchesInner();
 }
 
 export function removeRenderPatches(): void {

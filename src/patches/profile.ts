@@ -1,10 +1,10 @@
 import { after } from "@vendetta/patcher";
 import { React } from "@vendetta/metro/common";
 import { findInReactTree } from "@vendetta/utils";
-import { featureStatus, getUserProfileSection, resolveWithRetry } from "../lib/metro";
+import { featureStatus, flags, getUserProfileSection, resolveWithRetry } from "../lib/metro";
 import { stateStore } from "../storage/store";
 import LocalHideProfilePanel from "../components/ProfilePanel";
-import { log, warn } from "../lib/logger";
+import { log, warn, dbg } from "../lib/logger";
 
 /**
  * Profile integration: inject a LocalHide section into a user's profile when
@@ -15,6 +15,10 @@ import { log, warn } from "../lib/logger";
 let unpatch: (() => void) | null = null;
 
 export async function patchProfilePanel(): Promise<void> {
+    if (!flags.profilePanel) {
+        dbg("profile panel disabled by flag");
+        return;
+    }
     // profile modules lazy-init; retry for a while (user may open a profile late)
     const Section = await resolveWithRetry(getUserProfileSection, 40, 3000);
     if (typeof Section !== "function") {

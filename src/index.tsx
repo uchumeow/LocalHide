@@ -4,6 +4,7 @@ import { patchActionSheet, unpatchActionSheet } from "./patches/actionSheet";
 import { applyRenderPatches, removeRenderPatches } from "./patches/render";
 import { patchProfilePanel, unpatchProfilePanel } from "./patches/profile";
 import { selection } from "./state/selection";
+import { loadPersistedTrace, traceStep } from "./storage/fs";
 import { log, warn } from "./lib/logger";
 
 /**
@@ -18,9 +19,7 @@ import { log, warn } from "./lib/logger";
 
 let started = false;
 
-// Delay all feature work well past Discord's own boot sequence. Plugins are
-// evaluated early; touching metro lookups / patching too soon risks racing
-// client initialization on some devices.
+// Delay all feature work well past Discord's own boot sequence.
 const BOOT_DELAY_MS = 12000;
 
 export default {
@@ -45,20 +44,25 @@ export default {
 };
 
 async function start(): Promise<void> {
+    await loadPersistedTrace().catch(() => {});
+    traceStep("start");
+
     try {
         await stateStore.load();
+        traceStep("state-loaded");
     } catch (e) {
         warn("state load failed:", e instanceof Error ? e.message : e);
     }
 
     try {
         archives.init();
+        traceStep("archives-init");
     } catch (e) {
         warn("archive init failed:", e instanceof Error ? e.message : e);
     }
 
     // Each feature installs independently; a failure disables only itself.
     await Promise.allSettled([patchActionSheet(), applyRenderPatches(), patchProfilePanel()]);
-
+    traceStep("features-done");
     log("features active");
 }

@@ -34,6 +34,7 @@ function resolveFileModule(): any {
 
 // --- crash-survivable step trace -------------------------------------------
 
+const TRACE_PATH = "trace.log";
 const traceLines: string[] = [];
 let traceSeq = 0;
 
@@ -55,7 +56,7 @@ export function traceStep(step: string): void {
             dir = mod.getConstants().DocumentsDirPath;
         } catch {}
         const base = dir ? `${dir}/localhide` : "localhide";
-        void Promise.resolve(mod.writeFile("documents", `${base}/trace.log`, traceLines.join("\n"), "utf8")).catch(
+        void Promise.resolve(mod.writeFile("documents", `${base}/${TRACE_PATH}`, traceLines.join("\n"), "utf8")).catch(
             () => {}
         );
     } catch {}
@@ -63,6 +64,25 @@ export function traceStep(step: string): void {
 
 export function getTrace(): string[] {
     return [...traceLines];
+}
+
+/** Reload a previous session's trace so crashes leave readable evidence. */
+export async function loadPersistedTrace(): Promise<void> {
+    try {
+        const mod = resolveFileModule();
+        if (!mod || typeof mod.readFile !== "function") return;
+        let dir = "";
+        try {
+            dir = mod.getConstants().DocumentsDirPath;
+        } catch {}
+        const base = dir ? `${dir}/localhide` : "localhide";
+        const content: string = await mod.readFile("documents", `${base}/${TRACE_PATH}`, "utf8");
+        const prev = content.split("\n").filter(Boolean);
+        traceLines.unshift(...prev.slice(-80));
+        if (traceLines.length > 120) traceLines.splice(0, traceLines.length - 120);
+    } catch {
+        // no previous trace
+    }
 }
 
 const DIR = "localhide";

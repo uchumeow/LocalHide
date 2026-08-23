@@ -3,6 +3,7 @@ import { React } from "@vendetta/metro/common";
 import { findInReactTree } from "@vendetta/utils";
 import {
     featureStatus,
+    flags,
     getActionSheetRow,
     getAssetIdSafe,
     getFormRow,
@@ -10,6 +11,7 @@ import {
     isMessageSheetKey,
     resolveWithRetry
 } from "../lib/metro";
+import { traceStep } from "../storage/fs";
 import { getChannel, isOneToOneDm } from "../lib/snapshot";
 import HideRows from "../components/HideRows";
 import { dbg, log, warn } from "../lib/logger";
@@ -40,6 +42,10 @@ export async function patchActionSheet(): Promise<void> {
     }
 
     unpatchOpenLazy = before("openLazy", LazyActionSheet as any, ([comp, key, msg]) => {
+        // record every sheet key we see - survives crashes via trace.log
+        if (typeof key === "string") traceStep(`sheet:${key}`);
+
+        if (!flags.injectActionRows) return;
         if (!isMessageSheetKey(key) || !msg?.message) return;
         if (!comp?.then) return;
 
@@ -66,7 +72,7 @@ export async function patchActionSheet(): Promise<void> {
     });
 
     featureStatus.actionSheet = true;
-    log("action sheet patch installed");
+    log("action sheet observer installed (inject=" + flags.injectActionRows + ")");
 }
 
 export function unpatchActionSheet(): void {

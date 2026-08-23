@@ -15,6 +15,19 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 
 type AnyRecord = Record<string, any>;
 
+/**
+ * Feature switches for safe bisection. Everything defaults off except the
+ * action-sheet observer; re-enable one at a time once stability is confirmed.
+ */
+export const flags = {
+    observeActionSheets: true,
+    injectActionRows: false,
+    messageBackstop: false,
+    chatBanner: false,
+    profilePanel: false,
+    rowGeneratorFilter: false
+};
+
 export const featureStatus = {
     actionSheet: false,
     rowFilter: false,
