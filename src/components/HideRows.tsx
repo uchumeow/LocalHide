@@ -7,7 +7,7 @@ import { openScreen } from "../lib/modal";
 import PasswordSetupScreen from "../screens/PasswordSetup";
 import { log } from "../lib/logger";
 
-interface Props {
+export interface HideRowsProps {
     message: any;
     ActionSheetRow: any;
     FormRow: any;
@@ -16,11 +16,7 @@ interface Props {
     selectionAvailable?: boolean;
 }
 
-/**
- * The injected action rows. Rendered as a fragment so it can be pushed into
- * an existing row array without changing Discord's layout.
- */
-export default function HideRows({ message, ActionSheetRow, FormRow, iconHide, iconSelect, selectionAvailable }: Props) {
+export function createHideRows({ message, ActionSheetRow, FormRow, iconHide, iconSelect, selectionAvailable }: HideRowsProps) {
     const onPressHide = () => {
         try {
             closeSheet();
@@ -40,22 +36,30 @@ export default function HideRows({ message, ActionSheetRow, FormRow, iconHide, i
     };
 
     const Row = ActionSheetRow ?? FormRow;
-    if (!Row) return null;
+    if (!Row) return [];
 
-    return (
-        <>
-            <Row
-                label="Hide Locally"
-                leading={<Row.Icon source={iconHide ?? 0} style={{ opacity: 1 }} />}
-                onPress={onPressHide}
-            />
-            <Row
-                label="Select Messages"
-                leading={<Row.Icon source={iconSelect ?? 0} style={{ opacity: 1 }} />}
-                onPress={onPressSelect}
-            />
-        </>
-    );
+    const icon = (source: number | undefined) => React.createElement(Row.Icon, { source: source ?? 0 });
+    const iconProps = (source: number | undefined) =>
+        ActionSheetRow ? { icon: icon(source) } : { leading: icon(source) };
+
+    return [
+        React.createElement(Row, {
+            key: "localhide-hide",
+            label: "Hide Locally",
+            ...iconProps(iconHide),
+            onPress: onPressHide
+        }),
+        React.createElement(Row, {
+            key: "localhide-select",
+            label: "Select Messages",
+            ...iconProps(iconSelect),
+            onPress: onPressSelect
+        })
+    ];
+}
+
+export default function HideRows(props: HideRowsProps) {
+    return React.createElement(React.Fragment, null, ...createHideRows(props));
 }
 
 function closeSheet() {

@@ -14,7 +14,7 @@ import {
 } from "../lib/metro";
 import { getChannel, isOneToOneDm } from "../lib/snapshot";
 import { traceStep } from "../storage/fs";
-import HideRows from "../components/HideRows";
+import { createHideRows } from "../components/HideRows";
 import { dbg, log, warn } from "../lib/logger";
 
 /**
@@ -24,7 +24,7 @@ import { dbg, log, warn } from "../lib/logger";
  *   A. Direct patch of modules/messages/native/long_press/
  *      LongPressMessageActionSheet.tsx (305.x location).
  *   B. Legacy ActionSheet.openLazy hook with resilient key matching
- *      ("LongPressMessageActionSheet", older "MessageLongPressActionSheet").
+ *      ("MessageLongPressActionSheet", older "LongPressMessageActionSheet").
  * The openLazy observer also records every sheet key seen (trace.log).
  */
 
@@ -74,7 +74,7 @@ function injectRows(tree: any, message: any): boolean {
         "ic_select_24px"
     ]);
 
-    const rowsElement = React.createElement(HideRows, {
+    const rows = createHideRows({
         message,
         ActionSheetRow,
         FormRow,
@@ -83,26 +83,27 @@ function injectRows(tree: any, message: any): boolean {
         selectionAvailable: featureStatus.selectionBanner
     });
 
-    const rowArray: any[] | undefined = findInReactTree(
+    const groups: any[] | undefined = findInReactTree(
         tree,
-        (c: any) =>
-            Array.isArray(c) &&
-            c.some((child: any) => child?.type === ActionSheetRow || child?.type?.name === "ActionSheetRow")
+        (c: any) => Array.isArray(c) && c[0]?.type?.name === "ActionSheetRowGroup"
     );
-    if (Array.isArray(rowArray)) {
-        rowArray.push(rowsElement);
-        return true;
+    if (!groups?.length) return false;
+
+    for (const group of groups) {
+        const groupChildren: any[] | undefined = findInReactTree(
+            group,
+            (c: any) =>
+                Array.isArray(c) &&
+                c.some((child: any) => child?.type === ActionSheetRow || child?.type?.name === "ActionSheetRow")
+        );
+        if (Array.isArray(groupChildren)) {
+            groupChildren.unshift(...rows);
+            return true;
+        }
     }
 
-    const broadArray: any[] | undefined = findInReactTree(
-        tree,
-        (c: any) =>
-            Array.isArray(c) &&
-            c.length >= 2 &&
-            c.filter((x: any) => x?.props && ("label" in x.props || x?.type?.name?.includes("Row"))).length >= 2
-    );
-    if (Array.isArray(broadArray)) {
-        broadArray.push(rowsElement);
+    if (ActionSheetRow?.Group) {
+        groups.unshift(React.createElement(ActionSheetRow.Group, { key: "localhide" }, ...rows));
         return true;
     }
     return false;
@@ -119,11 +120,10 @@ export async function patchActionSheet(): Promise<void> {
             3000
         ).then(mod => {
             if (!mod) return dbg("A: direct sheet module not found");
-            const target = typeof mod === "function" ? mod : mod.default;
-            if (typeof target !== "function") return dbg("A: direct sheet target invalid");
+            if (typeof mod.default !== "function") return dbg("A: direct sheet target invalid");
 
             unpatchers.push(
-                after("default", target as any, ([props]: any[], tree: any) => {
+                after("default", mod, ([props]: any[], tree: any) => {
                     try {
                         const message = extractMessage(props, props?.route?.params);
                         if (!message || !isDmEligible(message)) return;
