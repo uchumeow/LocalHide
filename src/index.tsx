@@ -18,17 +18,24 @@ import { log, warn } from "./lib/logger";
 
 let started = false;
 
+// Delay all feature work well past Discord's own boot sequence. Plugins are
+// evaluated early; touching metro lookups / patching too soon risks racing
+// client initialization on some devices.
+const BOOT_DELAY_MS = 12000;
+
 export default {
     onLoad() {
         if (started) return;
         started = true;
-        void start();
+        log("loaded (features deferred)");
+        setTimeout(() => {
+            void start();
+        }, BOOT_DELAY_MS);
     },
 
     onUnload() {
         started = false;
         selection.exit();
-        // wipe any in-memory key material immediately
         void archives.destroySessionKeys();
         unpatchActionSheet();
         removeRenderPatches();
@@ -44,10 +51,14 @@ async function start(): Promise<void> {
         warn("state load failed:", e instanceof Error ? e.message : e);
     }
 
-    archives.init();
+    try {
+        archives.init();
+    } catch (e) {
+        warn("archive init failed:", e instanceof Error ? e.message : e);
+    }
 
     // Each feature installs independently; a failure disables only itself.
     await Promise.allSettled([patchActionSheet(), applyRenderPatches(), patchProfilePanel()]);
 
-    log("loaded");
+    log("features active");
 }

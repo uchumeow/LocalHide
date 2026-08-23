@@ -1,1 +1,1 @@
-{"name":"LocalHide","description":"Locally hide and protect messages in Discord DMs.","authors":[{"name":"uchumeow","id":"0"}],"main":"index.js","vendetta":{"icon":"ic_eye_closed_24px"},"hash":"bc5f40c521ec606f08bf7da80fc6288d35f6f1b775f017166b01b92523081120"}
+{"name":"LocalHide","description":"Locally hide and protect messages in Discord DMs.","authors":[{"name":"uchumeow","id":"0"}],"main":"index.js","vendetta":{"icon":"ic_eye_closed_24px"},"hash":"a9c648439c97b630dbfb6c7e599dd217ce144c7156b8caa61491e72fa8fbc1d4"}

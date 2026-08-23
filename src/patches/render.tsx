@@ -134,22 +134,26 @@ async function patchMessageWithContent(): Promise<void> {
 
     unpatchers.push(
         after("default", target as any, ([props]: any[], rendered: any) => {
-            const message = props?.message;
-            const channelId = String(message?.channel_id ?? message?.channelId ?? "");
-            const messageId = message ? String(message.id) : null;
+            try {
+                const message = props?.message;
+                const channelId = String(message?.channel_id ?? message?.channelId ?? "");
+                const messageId = message ? String(message.id) : null;
 
-            // backstop: hidden messages must never render
-            if (messageId && stateStore.isHidden(messageId)) {
-                filterStats.backstop++;
-                return null;
-            }
+                // backstop: hidden messages must never render
+                if (messageId && stateStore.isHidden(messageId)) {
+                    filterStats.backstop++;
+                    return null;
+                }
 
-            // selection mode tap interception + visual state
-            if (messageId && selection.isActiveFor(channelId)) {
-                return React.createElement(SelectableMessageWrapper, {
-                    messageId,
-                    children: rendered
-                });
+                // selection mode tap interception + visual state
+                if (messageId && selection.isActiveFor(channelId)) {
+                    return React.createElement(SelectableMessageWrapper, {
+                        messageId,
+                        children: rendered
+                    });
+                }
+            } catch {
+                // never break Discord's render pass
             }
             return rendered;
         })
@@ -225,13 +229,17 @@ async function patchChatViewBanner(): Promise<void> {
 
     unpatchers.push(
         after("default", target as any, (_args: unknown[], rendered: any) => {
-            if (!selection.get().active) return rendered;
-            return React.createElement(
-                React.Fragment,
-                null,
-                rendered,
-                React.createElement(SelectionBanner, null)
-            );
+            try {
+                if (!selection.get().active) return rendered;
+                return React.createElement(
+                    React.Fragment,
+                    null,
+                    rendered,
+                    React.createElement(SelectionBanner, null)
+                );
+            } catch {
+                return rendered;
+            }
         })
     );
     featureStatus.selectionBanner = true;
