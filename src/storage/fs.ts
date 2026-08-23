@@ -9,30 +9,60 @@ type AnyRecord = Record<string, any>;
 
 function resolveFileModule(): any {
     const g = globalThis as AnyRecord;
-    // Same names/order as Kettu's own native module resolution
-    const NAMES = ["NativeFileModule", "RTNFileManager", "DCDFileManager"];
-    try {
-        if (g.__turboModuleProxy) {
-            for (const name of NAMES) {
-                const m = g.__turboModuleProxy(name);
-                if (m) {
-                    resolvedModuleName = `turbo:${name}`;
-                    return m;
-                }
-            }
-        }
-    } catch {}
+    // Prefer the classic proxy modules (battle-tested on iOS by Bunny-era
+    // plugins); fall back to turbo interop.
+    const PROXY_NAMES = ["DCDFileManager", "RTNFileManager", "NativeFileModule"];
     const nmp = g.nativeModuleProxy;
     if (nmp) {
-        for (const name of NAMES) {
-            if (nmp[name]) {
-                resolvedModuleName = `proxy:${name}`;
-                return nmp[name];
+        for (const name of PROXY_NAMES) {
+            const m = nmp[name];
+            if (m && typeof m.writeFile === "function" && typeof m.readFile === "function") {
+                return m;
             }
         }
     }
-    resolvedModuleName = null;
+    try {
+        if (g.__turboModuleProxy) {
+            for (const name of PROXY_NAMES) {
+                const m = g.__turboModuleProxy(name);
+                if (m) return m;
+            }
+        }
+    } catch {}
     return null;
+}
+
+// --- crash-survivable step trace -------------------------------------------
+
+const traceLines: string[] = [];
+let traceSeq = 0;
+
+/**
+ * Record a named step with timestamp. Kept in memory AND flushed to
+ * localhide/trace.log (best-effort) so a hard crash leaves evidence of the
+ * last completed step. Never log contents - step ids only.
+ */
+export function traceStep(step: string): void {
+    traceSeq++;
+    const line = `${Date.now()} #${traceSeq} ${step}`;
+    traceLines.push(line);
+    if (traceLines.length > 120) traceLines.shift();
+    try {
+        const mod = resolveFileModule();
+        if (!mod || typeof mod.writeFile !== "function") return;
+        let dir = "";
+        try {
+            dir = mod.getConstants().DocumentsDirPath;
+        } catch {}
+        const base = dir ? `${dir}/localhide` : "localhide";
+        void Promise.resolve(mod.writeFile("documents", `${base}/trace.log`, traceLines.join("\n"), "utf8")).catch(
+            () => {}
+        );
+    } catch {}
+}
+
+export function getTrace(): string[] {
+    return [...traceLines];
 }
 
 const DIR = "localhide";
@@ -53,6 +83,13 @@ export function getFilesystemModuleName(): string | null {
 export function createFsAdapter(): FsAdapter | null {
     const mod = resolveFileModule();
     if (!mod || typeof mod.writeFile !== "function" || typeof mod.readFile !== "function") return null;
+    resolvedModuleName = (() => {
+        const nmp = (globalThis as AnyRecord).nativeModuleProxy ?? {};
+        for (const name of ["DCDFileManager", "RTNFileManager", "NativeFileModule"]) {
+            if (nmp[name] === mod) return `proxy:${name}`;
+        }
+        return "turbo-module";
+    })();
 
     let documentsDir: string | undefined;
     try {

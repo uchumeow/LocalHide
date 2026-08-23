@@ -11,7 +11,7 @@ import {
     verifierTag,
     wrapMasterKey
 } from "../crypto/crypto";
-import { createFsAdapter, writeQueue, type FsAdapter } from "./fs";
+import { createFsAdapter, writeQueue, traceStep, type FsAdapter } from "./fs";
 import {
     archivePath,
     SCHEMA_VERSION,
@@ -149,13 +149,19 @@ export class ArchiveManager {
         password: string
     ): Promise<void> {
         if (!this.fs) throw new Error("Local storage unavailable (native file module not found)");
+        traceStep("ca:start");
         const existing = await this.readRecord(channelId);
         if (existing) throw new Error("Archive already exists");
 
+        traceStep("ca:kdf-begin");
         const kdf = makeKdfParams();
         const { kek, ver } = deriveKeys(password, kdf);
+        traceStep("ca:kdf-done");
+
         const masterKey = generateMasterKey();
+        traceStep("ca:keygen-done");
         const devKey = await this.getDeviceKey();
+        traceStep("ca:devkey-done");
 
         const rec: ArchiveRecord = {
             schemaVersion: SCHEMA_VERSION,
@@ -179,7 +185,9 @@ export class ArchiveManager {
             updatedAt: Date.now()
         };
 
+        traceStep("ca:write-record");
         await this.writeRecord(channelId, rec);
+        traceStep("ca:write-record-done");
         this.sessionKeys.set(channelId, masterKey);
         await this.state.upsertConversationMeta(channelId, { userId, displayName });
         log("created archive for channel", channelId.slice(-4));
@@ -297,6 +305,7 @@ export class ArchiveManager {
         rec.updatedAt = now;
         await this.writeRecord(channelId, rec);
 
+        traceStep("hm:write-record-done");
         // 2) then the filter/state
         await this.state.addHiddenIds(
             channelId,

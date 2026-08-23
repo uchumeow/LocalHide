@@ -6,7 +6,9 @@ import { openScreen } from "./lib/modal";
 import ManageConversations from "./screens/Manage";
 import { featureStatus } from "./lib/metro";
 import { SCHEMA_VERSION } from "./storage/schema";
-import { getFilesystemModuleName } from "./storage/fs";
+import { getFilesystemModuleName, getTrace } from "./storage/fs";
+import { clipboard } from "@vendetta/metro/common";
+import { showToast } from "@vendetta/ui/toasts";
 import { isDebugEnabled, setDebugEnabled } from "./lib/logger";
 
 /**
@@ -52,6 +54,17 @@ export default function Settings() {
                 <FormRow
                     label="Storage backend"
                     trailing={<FormText>{getFilesystemModuleName() ?? "unavailable"}</FormText>}
+                />
+                <FormDivider />
+                <FormRow
+                    label="Copy step trace"
+                    subLabel={getTrace().length ? `Last: ${getTrace()[getTrace().length - 1].slice(14)}` : "No steps recorded yet"}
+                    onPress={() => {
+                        const t = getTrace();
+                        if (!t.length) return;
+                        clipboard.setString(t.join("\n"));
+                        showToast("Step trace copied");
+                    }}
                 />
                 <FormDivider />
                 <FormRow

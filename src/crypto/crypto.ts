@@ -27,7 +27,7 @@ import { randomBytes, utf8ToBytes } from "@noble/hashes/utils";
  * is transport encoding for JSON storage only, never "encryption".
  */
 
-export const PBKDF2_ITERATIONS = 600000;
+export const PBKDF2_ITERATIONS = 250000;
 const KEY_LEN = 32;
 const SALT_LEN = 16;
 const NONCE_LEN = 24;
