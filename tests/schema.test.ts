@@ -12,7 +12,7 @@ const validRecord = () => ({
     schemaVersion: SCHEMA_VERSION,
     channelId: CH,
     userId: "234567890123456789",
-    kdf: { algo: "scrypt", salt: "AAAAAAAAAAAAAAAAAAAAAA==", N: 32768, r: 8, p: 1 },
+    kdf: { algo: "pbkdf2", salt: "AAAAAAAAAAAAAAAAAAAAAA==", iterations: 600000 },
     verifier: "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVphYmNkZWY=",
     wrap: { algo: "xchacha20poly1305", ct: "QUJDRA==" },
     devWrap: { algo: "xchacha20poly1305", ct: "REVGRw==" },
@@ -72,8 +72,10 @@ describe("validateArchiveRecord", () => {
 
     it("rejects corruption in each critical field", () => {
         expect(() => validateArchiveRecord({ ...validRecord(), channelId: "nope" })).toThrow();
-        expect(() => validateArchiveRecord({ ...validRecord(), kdf: { ...validRecord().kdf, algo: "pbkdf2" } })).toThrow();
-        expect(() => validateArchiveRecord({ ...validRecord(), kdf: { ...validRecord().kdf, N: -1 } })).toThrow();
+        expect(() => validateArchiveRecord({ ...validRecord(), kdf: { ...validRecord().kdf, algo: "scrypt" } })).toThrow();
+        expect(() =>
+            validateArchiveRecord({ ...validRecord(), kdf: { ...validRecord().kdf, iterations: 1000 } })
+        ).toThrow();
         expect(() => validateArchiveRecord({ ...validRecord(), verifier: "" })).toThrow();
         expect(() => validateArchiveRecord({ ...validRecord(), wrap: { algo: "x", ct: "!!" } })).toThrow();
         expect(() => validateArchiveRecord({ ...validRecord(), data: undefined })).toThrow();

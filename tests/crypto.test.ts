@@ -13,7 +13,11 @@ import {
     wrapMasterKey
 } from "../src/crypto/crypto";
 
-const fastKdf = () => ({ algo: "scrypt" as const, salt: makeKdfParams().salt, N: 1024, r: 8, p: 1 });
+const fastKdf = (): ReturnType<typeof makeKdfParams> => ({
+    algo: "pbkdf2",
+    salt: makeKdfParams().salt,
+    iterations: 1000
+});
 
 describe("base64 transport encoding", () => {
     it("round-trips arbitrary bytes", () => {

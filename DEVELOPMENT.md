@@ -19,7 +19,9 @@ The bundle is a Rollup IIFE mapped onto Kettu's runtime globals:
 
 Output shape is the proven Kettu/Vendetta eval contract: `vendetta=>{return (function(o,…){…})({},vendetta.patcher,…);}` returning `{default: pluginInstance}`. Installable by directory URL (`<host>/LocalHide/` with `manifest.json` + `index.js`, polymanifest + sha256 `hash`).
 
-Dependencies shipped inside the bundle: `@noble/ciphers` (XChaCha20-Poly1305) and `@noble/hashes` (scrypt, HKDF, HMAC, SHA-256, CSPRNG).
+Dependencies shipped inside the bundle: `@noble/ciphers` (XChaCha20-Poly1305) and `@noble/hashes` (PBKDF2, HKDF, HMAC, SHA-256, CSPRNG).
+
+> Note: the KDF was originally scrypt(N=32768); its ~32 MB workspace crashed Hermes on iOS, so LocalHide uses PBKDF2-SHA256 @600k iterations (OWASP guidance, constant memory) instead. scrypt records are rejected cleanly.
 
 ## Architecture
 
@@ -32,7 +34,7 @@ src/
 │   ├── logger.ts        diagnostics (ids/counts only)
 │   ├── snapshot.ts      Discord message → archive snapshot conversion
 │   └── modal.tsx        full-screen pushLazy modal helper
-├── crypto/crypto.ts     scrypt+HKDF KDF, XChaCha20-Poly1305 AEAD, envelope wrap
+├── crypto/crypto.ts     PBKDF2+HKDF KDF, XChaCha20-Poly1305 AEAD, envelope wrap
 ├── storage/
 │   ├── fs.ts            native file adapter + serialized write queue
 │   ├── schema.ts        typed records, schemaVersion, validators

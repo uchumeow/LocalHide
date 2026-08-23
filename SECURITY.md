@@ -27,7 +27,7 @@ It does **not** protect against:
 Per-conversation archive (`Documents/localhide/archive.<channelId>.json`):
 
 ```
-password ──scrypt(N=32768,r=8,p=1, salt=16B random)──► master secret
+password ──PBKDF2-HMAC-SHA256(600k iters, salt=16B random)──► master secret
 master secret ──HKDF-SHA256──► KEK (key-wrapping) + VER (password verifier)
 ```
 

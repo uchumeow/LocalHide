@@ -1,5 +1,5 @@
 import { xchacha20poly1305 } from "@noble/ciphers/chacha";
-import { scrypt } from "@noble/hashes/scrypt";
+import { pbkdf2 } from "@noble/hashes/pbkdf2";
 import { hkdf } from "@noble/hashes/hkdf";
 import { hmac } from "@noble/hashes/hmac";
 import { sha256 } from "@noble/hashes/sha256";
@@ -8,9 +8,11 @@ import { randomBytes, utf8ToBytes } from "@noble/hashes/utils";
 /**
  * Cryptography for LocalHide archives.
  *
- * - KDF: scrypt (N=32768, r=8, p=1) over the user's password with a random
- *   16-byte salt per archive. No password is ever stored or logged.
- * - The scrypt output is split via HKDF-SHA256 into two independent keys:
+ * - KDF: PBKDF2-HMAC-SHA256, 600,000 iterations (OWASP guidance) over the
+ *   user's password with a random 16-byte salt per archive. Constant memory,
+ *   unlike scrypt whose 32 MB workspace crashes Hermes/iOS. No password is
+ *   ever stored or logged.
+ * - The KDF output is split via HKDF-SHA256 into two independent keys:
  *     * KEK ("localhide/hkdf/kek") - wraps/unwraps the archive master key
  *     * VER ("localhide/hkdf/ver") - produces the stored password verifier
  * - Archive master key: random 32 bytes per archive (envelope encryption).
@@ -25,19 +27,20 @@ import { randomBytes, utf8ToBytes } from "@noble/hashes/utils";
  * is transport encoding for JSON storage only, never "encryption".
  */
 
-export const SCRYPT_N = 32768;
-export const SCRYPT_R = 8;
-export const SCRYPT_P = 1;
+export const PBKDF2_ITERATIONS = 600000;
 const KEY_LEN = 32;
 const SALT_LEN = 16;
 const NONCE_LEN = 24;
 
 export interface KdfParams {
-    algo: "scrypt";
+    algo: "pbkdf2" | "scrypt";
     salt: string;
-    N: number;
-    r: number;
-    p: number;
+    /** pbkdf2 */
+    iterations?: number;
+    /** legacy scrypt fields (accepted for compatibility, no longer produced) */
+    N?: number;
+    r?: number;
+    p?: number;
 }
 
 export interface SealedBlob {
@@ -107,14 +110,21 @@ export function randomSaltB64(): string {
     return bytesToBase64(randomBytes(SALT_LEN));
 }
 
-export function makeKdfParams(): KdfParams {
-    return { algo: "scrypt", salt: randomSaltB64(), N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P };
+export function makeKdfParams(): { algo: "pbkdf2"; salt: string; iterations: number } {
+    return { algo: "pbkdf2", salt: randomSaltB64(), iterations: PBKDF2_ITERATIONS };
 }
 
 export function deriveKeys(password: string, kdf: KdfParams): { kek: Uint8Array; ver: Uint8Array } {
     const pw = utf8ToBytes(password.normalize("NFKC"));
     const salt = base64ToBytes(kdf.salt);
-    const master = scrypt(pw, salt, { N: kdf.N, r: kdf.r, p: kdf.p, dkLen: KEY_LEN });
+    let master: Uint8Array;
+    if (kdf.algo === "pbkdf2") {
+        const iterations = kdf.iterations ?? PBKDF2_ITERATIONS;
+        master = pbkdf2(sha256, pw, salt, { c: iterations, dkLen: KEY_LEN });
+    } else {
+        // scrypt archives were never shipped in a working build; reject cleanly
+        throw new Error("Unsupported KDF algorithm");
+    }
     return {
         kek: hkdf(sha256, master, new Uint8Array(0), utf8ToBytes("localhide/hkdf/kek"), KEY_LEN),
         ver: hkdf(sha256, master, new Uint8Array(0), utf8ToBytes("localhide/hkdf/ver"), KEY_LEN)

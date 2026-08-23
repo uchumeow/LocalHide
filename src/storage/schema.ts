@@ -51,11 +51,9 @@ export interface ArchiveDataPayload {
 }
 
 export interface KdfParamsStored {
-    algo: "scrypt";
+    algo: "pbkdf2";
     salt: string;
-    N: number;
-    r: number;
-    p: number;
+    iterations: number;
 }
 
 export interface SealedBlob {
@@ -149,18 +147,21 @@ export function validateArchiveRecord(raw: unknown): ArchiveRecord {
     if (!isObj(raw)) throw new Error("archive record is not an object");
     if (!isSnowflakeish(raw.channelId)) throw new Error("archive record has invalid channelId");
     const kdfRaw = raw.kdf;
-    if (
-        !isObj(kdfRaw) ||
-        kdfRaw.algo !== "scrypt" ||
-        !isB64(kdfRaw.salt) ||
-        typeof kdfRaw.N !== "number" ||
-        typeof kdfRaw.r !== "number" ||
-        typeof kdfRaw.p !== "number" ||
-        kdfRaw.N < 1 ||
-        kdfRaw.r < 1 ||
-        kdfRaw.p < 1
-    ) {
-        throw new Error("archive record has bad kdf params");
+    if (!isObj(kdfRaw)) throw new Error("archive record has bad kdf params");
+    if (!isB64(kdfRaw.salt)) throw new Error("archive record has bad kdf salt");
+
+    let kdf: KdfParamsStored;
+    if (kdfRaw.algo === "pbkdf2") {
+        if (
+            typeof kdfRaw.iterations !== "number" ||
+            !Number.isSafeInteger(kdfRaw.iterations) ||
+            kdfRaw.iterations < 100000
+        ) {
+            throw new Error("archive record has bad pbkdf2 iterations");
+        }
+        kdf = { algo: "pbkdf2", salt: kdfRaw.salt, iterations: kdfRaw.iterations };
+    } else {
+        throw new Error("archive record uses unsupported kdf algorithm");
     }
     if (!isB64(raw.verifier)) throw new Error("archive record has bad verifier");
     for (const blobKey of ["wrap", "data"] as const) {
@@ -178,13 +179,7 @@ export function validateArchiveRecord(raw: unknown): ArchiveRecord {
         schemaVersion: SCHEMA_VERSION,
         channelId: raw.channelId,
         userId: isSnowflakeish(raw.userId) ? raw.userId : null,
-        kdf: {
-            algo: "scrypt",
-            salt: kdfRaw.salt,
-            N: kdfRaw.N,
-            r: kdfRaw.r,
-            p: kdfRaw.p
-        },
+        kdf,
         verifier: raw.verifier,
         wrap: { algo: "xchacha20poly1305", ct: (raw.wrap as { ct: string }).ct },
         devWrap,
