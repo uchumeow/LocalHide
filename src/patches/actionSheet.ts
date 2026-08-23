@@ -149,7 +149,12 @@ export async function patchActionSheet(): Promise<void> {
             }
             unpatchers.push(
                 before("openLazy", LazyActionSheet as any, ([comp, key, msg]) => {
-                    if (typeof key === "string") traceStep(`sheet:${key}`);
+                    // surface every sheet call through the console channel
+                    if (typeof key === "string") {
+                        traceStep(`sheet:${key}`);
+                        const arg3 = msg ? Object.keys(msg).join(",") : "";
+                        dbg(`openLazy key=${key} arg3=[${arg3}] hasMsg=${Boolean(msg?.message)}`);
+                    }
                     if (!flags.injectActionRows) return;
                     if (!isMessageSheetKey(key) || !msg?.message) return;
                     if (!comp?.then) return;
